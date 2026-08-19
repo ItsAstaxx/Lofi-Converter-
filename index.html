@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warm Press — Lofi & Remix Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.0/lame.min.js"></script>
+<style>
+  :root{
+    --bg:#211610; --bg2:#2c1e16; --panel:#33251c; --cream:#f3e7d3;
+    --muted:#b9a58e; --gold:#d9a441; --maroon:#8a2e2e; --groove:#1a110c;
+    --line:rgba(217,164,65,0.15);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh;
+    background:
+      radial-gradient(circle at 15% 10%, #3a281c 0%, transparent 45%),
+      radial-gradient(circle at 85% 90%, #3a2416 0%, transparent 45%),
+      var(--bg);
+    color:var(--cream); font-family:'Work Sans', sans-serif;
+    display:flex; justify-content:center; padding:32px 16px 60px;
+  }
+  .wrap{width:100%; max-width:960px;}
+  header{text-align:center; margin-bottom:24px;}
+  h1{font-family:'Fraunces', serif; font-weight:700; font-size:clamp(28px,5vw,42px); margin:0 0 6px;}
+  header p{color:var(--muted); margin:0; font-size:14px;}
+
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:18px;
+    padding:26px; box-shadow:0 20px 50px rgba(0,0,0,0.35);
+  }
+  .section-title{
+    font-family:'Fraunces', serif; font-size:15px; color:var(--gold);
+    margin:0 0 12px; letter-spacing:0.3px;
+  }
+
+  .dropzone{
+    border:2px dashed rgba(217,164,65,0.35); border-radius:14px;
+    padding:22px; text-align:center; margin-bottom:24px; transition:all .15s ease;
+  }
+  .dropzone.dragover{border-color:var(--gold); background:rgba(217,164,65,0.07);}
+  .file-btn{
+    background:var(--gold); color:#241a10; border:none; padding:12px 20px;
+    border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; font-family:'Work Sans',sans-serif;
+  }
+  .file-btn:hover{filter:brightness(1.08);}
+  #fileInfo{font-size:12px; color:var(--muted); font-family:'Space Mono', monospace; margin-top:10px; display:block;}
+  .drop-hint{font-size:12px; color:var(--muted); margin-top:8px;}
+
+  canvas#waveform{
+    width:100%; height:90px; display:block; border-radius:10px;
+    background:var(--groove); margin-bottom:20px; cursor:pointer;
+  }
+
+  .deck{
+    display:flex; gap:34px; align-items:center; flex-wrap:wrap; justify-content:center;
+    padding:6px 0 26px; border-bottom:1px solid var(--line); margin-bottom:22px;
+  }
+  .vinyl-holder{position:relative; width:150px; height:150px; flex:none;}
+  .vinyl{
+    width:150px; height:150px; border-radius:50%;
+    background:repeating-radial-gradient(circle at center, var(--groove) 0px, var(--groove) 2px, #241914 3px, #241914 4px);
+    box-shadow:0 10px 30px rgba(0,0,0,0.5), inset 0 0 0 6px #120c08;
+    animation: spin 2.4s linear infinite; animation-play-state: paused;
+  }
+  .vinyl.playing{animation-play-state: running;}
+  .vinyl::after{
+    content:""; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:50px; height:50px; border-radius:50%;
+    background: radial-gradient(circle, var(--maroon) 0%, #6f2323 100%); box-shadow:0 0 0 2px #1a110c;
+  }
+  .vinyl::before{
+    content:""; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:8px; height:8px; border-radius:50%; background:#120c08; z-index:2;
+  }
+  .label-text{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    font-family:'Space Mono', monospace; font-size:8px; letter-spacing:1px;
+    color:var(--gold); text-align:center; width:40px; z-index:2; pointer-events:none;
+  }
+  .tonearm{
+    position:absolute; top:-10px; right:-18px; width:8px; height:80px;
+    background:linear-gradient(#c9b489,#8a7550); border-radius:4px;
+    transform-origin:top center; transform:rotate(-18deg); transition:transform 0.6s ease;
+  }
+  .tonearm::after{content:""; position:absolute; bottom:-4px; left:-4px; width:16px; height:16px; border-radius:50%; background:#c9b489;}
+  .vinyl-holder.playing .tonearm{transform:rotate(4deg);}
+  @keyframes spin{from{transform:rotate(0)} to{transform:rotate(360deg)}}
+
+  .transport{display:flex; flex-direction:column; gap:12px; min-width:220px;}
+  .play-btn{
+    background:var(--maroon); color:var(--cream); border:none; padding:13px 20px;
+    border-radius:12px; font-size:15px; font-weight:600; cursor:pointer; font-family:'Work Sans',sans-serif;
+  }
+  .play-btn:disabled{opacity:0.4; cursor:not-allowed;}
+  .play-btn:hover:not(:disabled){filter:brightness(1.1);}
+  #timeDisplay{font-family:'Space Mono', monospace; font-size:13px; color:var(--muted);}
+  #statusMsg{font-size:12px; color:#e08a5b; min-height:14px;}
+
+  .toggle-row{display:flex; align-items:center; gap:10px; font-size:13px; color:var(--muted);}
+  .switch{position:relative; width:42px; height:22px; flex:none;}
+  .switch input{opacity:0; width:0; height:0;}
+  .slider-toggle{
+    position:absolute; cursor:pointer; inset:0; background:#4a382a; border-radius:22px; transition:.2s;
+  }
+  .slider-toggle::before{
+    content:""; position:absolute; width:16px; height:16px; left:3px; top:3px;
+    background:var(--cream); border-radius:50%; transition:.2s;
+  }
+  .switch input:checked + .slider-toggle{background:var(--gold);}
+  .switch input:checked + .slider-toggle::before{transform:translateX(20px); background:#241a10;}
+
+  .presets{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:24px;}
+  .preset-btn{
+    background:var(--bg2); color:var(--cream); border:1px solid var(--line);
+    padding:9px 15px; border-radius:20px; font-size:13px; cursor:pointer; font-family:'Work Sans',sans-serif;
+  }
+  .preset-btn:hover{border-color:var(--gold); color:var(--gold);}
+
+  .controls{display:grid; grid-template-columns:1fr 1fr; gap:20px 28px; margin-bottom:8px;}
+  @media(max-width:560px){.controls{grid-template-columns:1fr;}}
+  .ctrl label{display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:8px;}
+  .ctrl label span.val{color:var(--gold); font-family:'Space Mono', monospace;}
+  input[type=range]{
+    -webkit-appearance:none; width:100%; height:4px; border-radius:2px;
+    background:linear-gradient(90deg, var(--gold), rgba(217,164,65,0.15)); outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+    background:var(--cream); border:3px solid var(--maroon); cursor:pointer; margin-top:-1px;
+  }
+  input[type=range]::-moz-range-thumb{width:16px; height:16px; border-radius:50%; background:var(--cream); border:3px solid var(--maroon); cursor:pointer;}
+
+  .subsection{padding-top:20px; margin-top:6px; border-top:1px solid var(--line);}
+  .num-row{display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;}
+  .num-field{display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--muted);}
+  .num-field input[type=number], .num-field input[type=text], .num-field select{
+    background:var(--bg2); border:1px solid var(--line); color:var(--cream);
+    border-radius:8px; padding:8px 10px; font-family:'Space Mono', monospace; font-size:13px; width:110px;
+  }
+
+  .export-row{
+    margin-top:22px; padding-top:20px; border-top:1px solid var(--line);
+    display:flex; gap:14px; align-items:center; flex-wrap:wrap;
+  }
+  .export-btn{
+    background:var(--gold); color:#241a10; border:none; padding:14px 22px;
+    border-radius:12px; font-weight:700; font-size:14px; cursor:pointer; font-family:'Work Sans',sans-serif;
+  }
+  .export-btn:disabled{opacity:0.4; cursor:not-allowed;}
+  .reset-btn{
+    background:transparent; color:var(--muted); border:1px solid var(--line);
+    padding:13px 18px; border-radius:12px; font-size:13px; cursor:pointer; font-family:'Work Sans',sans-serif;
+  }
+  .reset-btn:hover{color:var(--gold); border-color:var(--gold);}
+  #exportStatus{font-size:13px; color:var(--muted); font-family:'Space Mono', monospace;}
+  .download-link{color:var(--gold); font-weight:600; text-decoration:none; border-bottom:1px solid var(--gold); font-size:14px;}
+  #noteBox{margin-top:18px; font-size:12px; color:var(--muted); line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Warm Press</h1>
+    <p>Apna gaana daalo, lofi/remix bana ke seedha download karo — sab kuch browser mein hi</p>
+  </header>
+
+  <div class="card">
+    <div class="dropzone" id="dropzone">
+      <label class="file-btn" for="fileInput">Song upload karo</label>
+      <input type="file" id="fileInput" accept="audio/*" style="display:none;">
+      <div class="drop-hint">...ya file ko yahan drag-drop bhi kar sakte ho</div>
+      <span id="fileInfo">Koi file select nahi hui</span>
+    </div>
+
+    <canvas id="waveform" width="900" height="90"></canvas>
+
+    <div class="presets" id="presetRow">
+      <button class="preset-btn" data-preset="lofi">Lofi Classic</button>
+      <button class="preset-btn" data-preset="slowreverb">Slowed + Reverb</button>
+      <button class="preset-btn" data-preset="nightcore">Nightcore</button>
+      <button class="preset-btn" data-preset="eightd">8D Trippy</button>
+      <button class="preset-btn" data-preset="trap">Trap Bass Boost</button>
+    </div>
+
+    <div class="deck">
+      <div class="vinyl-holder" id="vinylHolder">
+        <div class="tonearm"></div>
+        <div class="vinyl" id="vinyl"><div class="label-text">WARM<br>PRESS</div></div>
+      </div>
+      <div class="transport">
+        <button class="play-btn" id="playBtn" disabled>▶ Preview suno</button>
+        <div id="timeDisplay">00:00 / 00:00</div>
+        <div class="toggle-row">
+          <label class="switch"><input type="checkbox" id="beforeAfter" checked><span class="slider-toggle"></span></label>
+          <span id="baLabel">Processed sun raha hai (original ke liye toggle off karo)</span>
+        </div>
+        <div id="statusMsg"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl">
+        <label>Speed <span class="val" id="speedVal">0.85x</span></label>
+        <input type="range" id="speed" min="0.60" max="1.50" step="0.01" value="0.85">
+      </div>
+      <div class="ctrl">
+        <label>Pitch <span class="val" id="pitchVal">-60 cents</span></label>
+        <input type="range" id="pitch" min="-300" max="300" step="5" value="-60">
+      </div>
+      <div class="ctrl">
+        <label>Bass Boost <span class="val" id="bassVal">+6 dB</span></label>
+        <input type="range" id="bass" min="0" max="12" step="1" value="6">
+      </div>
+      <div class="ctrl">
+        <label>Treble Cut <span class="val" id="trebleVal">-8 dB</span></label>
+        <input type="range" id="treble" min="0" max="15" step="1" value="8">
+      </div>
+      <div class="ctrl">
+        <label>Reverb Mix <span class="val" id="reverbVal">30%</span></label>
+        <input type="range" id="reverb" min="0" max="100" step="1" value="30">
+      </div>
+      <div class="ctrl">
+        <label>Vinyl Crackle <span class="val" id="crackleVal">20%</span></label>
+        <input type="range" id="crackle" min="0" max="100" step="1" value="20">
+      </div>
+      <div class="ctrl">
+        <label>Rain Ambience <span class="val" id="rainVal">15%</span></label>
+        <input type="range" id="rain" min="0" max="100" step="1" value="15">
+      </div>
+      <div class="ctrl">
+        <label>Stereo Width <span class="val" id="widthVal">0%</span></label>
+        <input type="range" id="width" min="0" max="100" step="1" value="0">
+      </div>
+    </div>
+
+    <div class="toggle-row" style="margin:10px 0 4px;">
+      <label class="switch"><input type="checkbox" id="eightD"><span class="slider-toggle"></span></label>
+      <span>8D Auto-Pan (headphones ke saath best lagta hai)</span>
+    </div>
+
+    <div class="subsection">
+      <div class="section-title">Trim (seconds)</div>
+      <div class="num-row">
+        <div class="num-field">Start<input type="number" id="trimStart" min="0" step="0.5" value="0"></div>
+        <div class="num-field">End<input type="number" id="trimEnd" min="0" step="0.5" value="0"></div>
+        <div class="num-field">Fade In (s)<input type="number" id="fadeIn" min="0" max="10" step="0.1" value="1"></div>
+        <div class="num-field">Fade Out (s)<input type="number" id="fadeOut" min="0" max="10" step="0.1" value="1"></div>
+      </div>
+    </div>
+
+    <div class="subsection">
+      <div class="section-title">Export</div>
+      <div class="num-row">
+        <div class="num-field">Format
+          <select id="formatSelect"><option value="wav">WAV</option><option value="mp3">MP3</option></select>
+        </div>
+        <div class="num-field">File naam<input type="text" id="filenameInput" value="warm-press-output"></div>
+      </div>
+    </div>
+
+    <div class="export-row">
+      <button class="export-btn" id="exportBtn" disabled>Render &amp; Download</button>
+      <button class="reset-btn" id="resetBtn">Reset defaults</button>
+      <span id="exportStatus"></span>
+    </div>
+    <div id="noteBox">
+      Note: Sirf apni khud ki recordings ya royalty-free / licensed audio hi use karo. Original artists ke copyrighted songs ka remix bana ke public distribute ya monetize karna copyright issue ban sakta hai — personal use tak hi safe hai.
+    </div>
+  </div>
+</div>
+
+<script>
+let audioCtx = null;
+let audioBuffer = null;
+let liveSource = null;
+let isPlaying = false;
+let startedAt = 0;
+let rafId = null;
+let waveformPeaks = null;
+
+const els = {};
+['fileInput','fileInfo','playBtn','exportBtn','exportStatus','timeDisplay','vinyl','vinylHolder',
+ 'statusMsg','speed','pitch','bass','treble','reverb','crackle','rain','width','eightD',
+ 'trimStart','trimEnd','fadeIn','fadeOut','formatSelect','filenameInput','beforeAfter','baLabel',
+ 'dropzone','resetBtn','presetRow'].forEach(id=> els[id] = document.getElementById(id));
+const canvas = document.getElementById('waveform');
+const ctx2d = canvas.getContext('2d');
+
+const valEls = {
+  speed: document.getElementById('speedVal'), pitch: document.getElementById('pitchVal'),
+  bass: document.getElementById('bassVal'), treble: document.getElementById('trebleVal'),
+  reverb: document.getElementById('reverbVal'), crackle: document.getElementById('crackleVal'),
+  rain: document.getElementById('rainVal'), width: document.getElementById('widthVal'),
+};
+
+const DEFAULTS = { speed:0.85, pitch:-60, bass:6, treble:8, reverb:30, crackle:20, rain:15, width:0, eightD:false, fadeIn:1, fadeOut:1 };
+
+function refreshLabels(){
+  valEls.speed.textContent = parseFloat(els.speed.value).toFixed(2) + 'x';
+  valEls.pitch.textContent = els.pitch.value + ' cents';
+  valEls.bass.textContent = '+' + els.bass.value + ' dB';
+  valEls.treble.textContent = '-' + els.treble.value + ' dB';
+  valEls.reverb.textContent = els.reverb.value + '%';
+  valEls.crackle.textContent = els.crackle.value + '%';
+  valEls.rain.textContent = els.rain.value + '%';
+  valEls.width.textContent = els.width.value + '%';
+}
+['speed','pitch','bass','treble','reverb','crackle','rain','width'].forEach(id=>{
+  els[id].addEventListener('input', ()=>{ refreshLabels(); drawWaveform(); });
+});
+els.beforeAfter.addEventListener('change', ()=>{
+  els.baLabel.textContent = els.beforeAfter.checked
+    ? 'Processed sun raha hai (original ke liye toggle off karo)'
+    : 'Original sun raha hai (processed ke liye toggle on karo)';
+});
+refreshLabels();
+
+function fmtTime(s){
+  if(!isFinite(s) || s<0) return '00:00';
+  const m = Math.floor(s/60); const sec = Math.floor(s%60);
+  return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+}
+
+function getTrim(){
+  let start = parseFloat(els.trimStart.value) || 0;
+  let end = parseFloat(els.trimEnd.value) || 0;
+  if(!audioBuffer) return {start:0, end:0};
+  if(end <= 0 || end > audioBuffer.duration) end = audioBuffer.duration;
+  if(start < 0) start = 0;
+  if(start >= end) start = 0;
+  return {start, end};
+}
+
+// ---- Noise / IR generation ----
+function makeCrackleBuffer(ctx, duration){
+  const sr = ctx.sampleRate; const len = Math.floor(sr*duration);
+  const buf = ctx.createBuffer(1, len, sr); const d = buf.getChannelData(0);
+  for(let i=0;i<len;i++){
+    let sample = (Math.random()*2-1)*0.02;
+    if(Math.random() < 0.0018) sample += (Math.random()*2-1)*0.9;
+    d[i] = sample;
+  }
+  return buf;
+}
+function makeRainBuffer(ctx, duration){
+  const sr = ctx.sampleRate; const len = Math.floor(sr*duration);
+  const buf = ctx.createBuffer(1, len, sr); const d = buf.getChannelData(0);
+  let lp = 0;
+  for(let i=0;i<len;i++){ const w = Math.random()*2-1; lp = lp*0.97 + w*0.03; d[i] = lp*3.2; }
+  return buf;
+}
+function makeImpulseResponse(ctx, duration, decay){
+  const sr = ctx.sampleRate; const len = Math.floor(sr*duration);
+  const buf = ctx.createBuffer(2, len, sr);
+  for(let ch=0; ch<2; ch++){
+    const d = buf.getChannelData(ch);
+    for(let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, decay);
+  }
+  return buf;
+}
+
+// mid-side stereo widening: returns the node to connect further chain to
+function applyStereoWidth(ctx, inputNode, widthPct, numChannels){
+  if(numChannels < 2 || widthPct <= 0) return inputNode;
+  const amt = widthPct/100 * 1.6;
+  const splitter = ctx.createChannelSplitter(2);
+  const merger = ctx.createChannelMerger(2);
+  inputNode.connect(splitter);
+
+  const midL = ctx.createGain(); midL.gain.value = 0.5;
+  const midR = ctx.createGain(); midR.gain.value = 0.5;
+  const mid = ctx.createGain(); mid.gain.value = 1;
+  splitter.connect(midL, 0); splitter.connect(midR, 1);
+  midL.connect(mid); midR.connect(mid);
+
+  const sideL = ctx.createGain(); sideL.gain.value = 0.5;
+  const sideRneg = ctx.createGain(); sideRneg.gain.value = -0.5;
+  const side = ctx.createGain(); side.gain.value = amt;
+  splitter.connect(sideL, 0); splitter.connect(sideRneg, 1);
+  sideL.connect(side); sideRneg.connect(side);
+
+  const sideInv = ctx.createGain(); sideInv.gain.value = -1;
+  side.connect(sideInv);
+
+  mid.connect(merger, 0, 0); side.connect(merger, 0, 0);
+  mid.connect(merger, 0, 1); sideInv.connect(merger, 0, 1);
+  return merger;
+}
+
+function currentOpts(){
+  return {
+    speed: parseFloat(els.speed.value), pitch: parseFloat(els.pitch.value),
+    bass: parseFloat(els.bass.value), treble: parseFloat(els.treble.value),
+    reverbMix: parseFloat(els.reverb.value)/100,
+    crackle: parseFloat(els.crackle.value)/100 * 0.5,
+    rain: parseFloat(els.rain.value)/100 * 0.4,
+    widthPct: parseFloat(els.width.value),
+    eightD: els.eightD.checked,
+    fadeIn: Math.max(0, parseFloat(els.fadeIn.value) || 0),
+    fadeOut: Math.max(0, parseFloat(els.fadeOut.value) || 0),
+  };
+}
+
+function buildGraph(ctx, sourceBuffer, destinationNode, opts, trim, processed){
+  const source = ctx.createBufferSource();
+  source.buffer = sourceBuffer;
+  if(processed){ source.playbackRate.value = opts.speed; source.detune.value = opts.pitch; }
+
+  const playedDuration = (trim.end - trim.start) / (processed ? opts.speed : 1);
+  const master = ctx.createGain();
+  master.gain.value = 0.0001;
+
+  let crackleSrc=null, rainSrc=null, lfo=null, lfoGain=null, panner=null;
+
+  if(!processed){
+    source.connect(master);
+  }else{
+    const bassFilter = ctx.createBiquadFilter();
+    bassFilter.type = 'lowshelf'; bassFilter.frequency.value = 200; bassFilter.gain.value = opts.bass;
+    const trebleFilter = ctx.createBiquadFilter();
+    trebleFilter.type = 'highshelf'; trebleFilter.frequency.value = 3500; trebleFilter.gain.value = -opts.treble;
+
+    const dryGain = ctx.createGain(); dryGain.gain.value = 1 - opts.reverbMix*0.6;
+    const wetGain = ctx.createGain(); wetGain.gain.value = opts.reverbMix;
+    const convolver = ctx.createConvolver(); convolver.buffer = makeImpulseResponse(ctx, 2.2, 2.2);
+    const preMix = ctx.createGain();
+
+    source.connect(bassFilter); bassFilter.connect(trebleFilter);
+    trebleFilter.connect(dryGain); trebleFilter.connect(convolver); convolver.connect(wetGain);
+    dryGain.connect(preMix); wetGain.connect(preMix);
+
+    if(opts.crackle > 0){
+      crackleSrc = ctx.createBufferSource(); crackleSrc.buffer = makeCrackleBuffer(ctx, 4); crackleSrc.loop = true;
+      const g = ctx.createGain(); g.gain.value = opts.crackle;
+      crackleSrc.connect(g).connect(preMix);
+    }
+    if(opts.rain > 0){
+      rainSrc = ctx.createBufferSource(); rainSrc.buffer = makeRainBuffer(ctx, 4); rainSrc.loop = true;
+      const g = ctx.createGain(); g.gain.value = opts.rain;
+      rainSrc.connect(g).connect(preMix);
+    }
+
+    const widened = applyStereoWidth(ctx, preMix, opts.widthPct, sourceBuffer.numberOfChannels);
+
+    let chainEnd = widened;
+    if(opts.eightD){
+      panner = ctx.createStereoPanner();
+      lfo = ctx.createOscillator(); lfo.frequency.value = 0.12;
+      lfoGain = ctx.createGain(); lfoGain.gain.value = 0.85;
+      lfo.connect(lfoGain); lfoGain.connect(panner.pan);
+      widened.connect(panner);
+      chainEnd = panner;
+    }
+    chainEnd.connect(master);
+  }
+
+  master.connect(destinationNode);
+
+  return { source, crackleSrc, rainSrc, lfo, master, playedDuration };
+}
+
+function scheduleFades(master, ctxStartTime, playedDuration, fadeIn, fadeOut, targetGain){
+  const g = master.gain;
+  g.cancelScheduledValues(ctxStartTime);
+  g.setValueAtTime(0.0001, ctxStartTime);
+  const fi = Math.min(fadeIn, playedDuration/2 || fadeIn);
+  const fo = Math.min(fadeOut, playedDuration/2 || fadeOut);
+  if(fi > 0) g.linearRampToValueAtTime(targetGain, ctxStartTime + fi);
+  else g.setValueAtTime(targetGain, ctxStartTime);
+  const foStart = Math.max(ctxStartTime + fi, ctxStartTime + playedDuration - fo);
+  g.setValueAtTime(targetGain, foStart);
+  if(fo > 0) g.linearRampToValueAtTime(0.0001, ctxStartTime + playedDuration);
+}
+
+// ---- Waveform ----
+function computePeaks(buffer, width){
+  const data = buffer.getChannelData(0);
+  const blockSize = Math.max(1, Math.floor(data.length / width));
+  const peaks = [];
+  for(let i=0;i<width;i++){
+    const start = i*blockSize; let min=1, max=-1;
+    for(let j=0;j<blockSize && (start+j)<data.length; j++){
+      const v = data[start+j]; if(v<min) min=v; if(v>max) max=v;
+    }
+    peaks.push([min,max]);
+  }
+  return peaks;
+}
+function drawWaveform(playheadFrac){
+  ctx2d.clearRect(0,0,canvas.width,canvas.height);
+  if(!waveformPeaks){ return; }
+  const mid = canvas.height/2;
+  ctx2d.fillStyle = 'rgba(217,164,65,0.55)';
+  for(let i=0;i<waveformPeaks.length;i++){
+    const [min,max] = waveformPeaks[i];
+    const y1 = mid + min*mid*0.9; const y2 = mid + max*mid*0.9;
+    ctx2d.fillRect(i, y1, 1, Math.max(1, y2-y1));
+  }
+  if(audioBuffer){
+    const {start,end} = getTrim();
+    const x1 = (start/audioBuffer.duration)*canvas.width;
+    const x2 = (end/audioBuffer.duration)*canvas.width;
+    ctx2d.fillStyle = 'rgba(217,164,65,0.12)';
+    ctx2d.fillRect(0,0,x1,canvas.height);
+    ctx2d.fillRect(x2,0,canvas.width-x2,canvas.height);
+  }
+  if(typeof playheadFrac === 'number'){
+    const x = playheadFrac*canvas.width;
+    ctx2d.fillStyle = '#f3e7d3';
+    ctx2d.fillRect(x, 0, 2, canvas.height);
+  }
+}
+canvas.addEventListener('click', (e)=>{
+  if(!audioBuffer) return;
+  const rect = canvas.getBoundingClientRect();
+  const frac = (e.clientX-rect.left)/rect.width;
+  const t = frac*audioBuffer.duration;
+  // shift-click sets end, plain click sets start
+  if(e.shiftKey) els.trimEnd.value = t.toFixed(1);
+  else els.trimStart.value = t.toFixed(1);
+  drawWaveform();
+});
+
+// ---- File loading ----
+function decodeAudio(ctx, arrayBuf){
+  return new Promise((resolve, reject)=>{
+    const maybe = ctx.decodeAudioData(arrayBuf, resolve, reject);
+    if(maybe && typeof maybe.then === 'function') maybe.then(resolve).catch(reject);
+  });
+}
+async function loadFile(file){
+  if(!file) return;
+  els.fileInfo.textContent = 'Loading: ' + file.name;
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const arrayBuf = await file.arrayBuffer();
+    audioBuffer = await decodeAudio(audioCtx, arrayBuf);
+    els.fileInfo.textContent = file.name + ' — ' + fmtTime(audioBuffer.duration);
+    els.playBtn.disabled = false; els.exportBtn.disabled = false;
+    els.trimStart.value = 0; els.trimEnd.value = audioBuffer.duration.toFixed(1);
+    els.trimStart.max = audioBuffer.duration; els.trimEnd.max = audioBuffer.duration;
+    els.timeDisplay.textContent = '00:00 / ' + fmtTime(audioBuffer.duration/parseFloat(els.speed.value));
+    waveformPeaks = computePeaks(audioBuffer, canvas.width);
+    drawWaveform();
+  }catch(err){
+    console.error(err);
+    const reason = (err && (err.message || err.name)) ? (err.message || err.name) : 'unknown error';
+    els.fileInfo.textContent = 'Load fail: ' + reason + ' (format: ' + (file.type || 'unknown') + ')';
+  }
+}
+els.fileInput.addEventListener('change', (e)=> loadFile(e.target.files[0]));
+['dragover','dragenter'].forEach(evt=> els.dropzone.addEventListener(evt, (e)=>{ e.preventDefault(); els.dropzone.classList.add('dragover'); }));
+['dragleave','drop'].forEach(evt=> els.dropzone.addEventListener(evt, (e)=>{ e.preventDefault(); els.dropzone.classList.remove('dragover'); }));
+els.dropzone.addEventListener('drop', (e)=>{
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(file) loadFile(file);
+});
+
+// ---- Presets ----
+const PRESETS = {
+  lofi:       { speed:0.85, pitch:-60,  bass:6,  treble:8,  reverb:30, crackle:20, rain:15, width:0,  eightD:false, fadeIn:1,   fadeOut:1 },
+  slowreverb: { speed:0.78, pitch:-100, bass:4,  treble:4,  reverb:55, crackle:5,  rain:5,  width:20, eightD:false, fadeIn:2,   fadeOut:2 },
+  nightcore:  { speed:1.25, pitch:250,  bass:0,  treble:0,  reverb:10, crackle:0,  rain:0,  width:10, eightD:false, fadeIn:0.5, fadeOut:0.5 },
+  eightd:     { speed:1.0,  pitch:0,    bass:3,  treble:2,  reverb:25, crackle:0,  rain:0,  width:60, eightD:true,  fadeIn:1,   fadeOut:1 },
+  trap:       { speed:0.95, pitch:-20,  bass:12, treble:5,  reverb:10, crackle:0,  rain:0,  width:10, eightD:false, fadeIn:0.3, fadeOut:0.3 },
+};
+function applyPreset(p){
+  els.speed.value=p.speed; els.pitch.value=p.pitch; els.bass.value=p.bass; els.treble.value=p.treble;
+  els.reverb.value=p.reverb; els.crackle.value=p.crackle; els.rain.value=p.rain; els.width.value=p.width;
+  els.eightD.checked = p.eightD; els.fadeIn.value=p.fadeIn; els.fadeOut.value=p.fadeOut;
+  refreshLabels(); drawWaveform();
+}
+els.presetRow.addEventListener('click', (e)=>{
+  const btn = e.target.closest('.preset-btn'); if(!btn) return;
+  applyPreset(PRESETS[btn.dataset.preset]);
+});
+els.resetBtn.addEventListener('click', ()=>{
+  applyPreset(DEFAULTS);
+  els.beforeAfter.checked = true; els.baLabel.textContent = 'Processed sun raha hai (original ke liye toggle off karo)';
+  els.formatSelect.value = 'wav'; els.filenameInput.value = 'warm-press-output';
+  if(audioBuffer){ els.trimStart.value = 0; els.trimEnd.value = audioBuffer.duration.toFixed(1); }
+  drawWaveform();
+});
+
+// ---- Preview playback ----
+function stopPreview(){
+  if(liveSource){
+    try{ liveSource.source.stop(); }catch(e){}
+    try{ liveSource.crackleSrc && liveSource.crackleSrc.stop(); }catch(e){}
+    try{ liveSource.rainSrc && liveSource.rainSrc.stop(); }catch(e){}
+    try{ liveSource.lfo && liveSource.lfo.stop(); }catch(e){}
+  }
+  isPlaying = false;
+  els.vinyl.classList.remove('playing'); els.vinylHolder.classList.remove('playing');
+  els.playBtn.textContent = '▶ Preview suno';
+  if(rafId) cancelAnimationFrame(rafId);
+  drawWaveform();
+}
+function updateClock(){
+  if(!isPlaying || !liveSource) return;
+  const elapsed = audioCtx.currentTime - startedAt;
+  const total = liveSource.playedDuration;
+  els.timeDisplay.textContent = fmtTime(elapsed) + ' / ' + fmtTime(total);
+  drawWaveform(Math.min(1, elapsed/total));
+  if(elapsed >= total){ stopPreview(); return; }
+  rafId = requestAnimationFrame(updateClock);
+}
+els.playBtn.addEventListener('click', async ()=>{
+  els.statusMsg.textContent = '';
+  if(!audioBuffer){ els.statusMsg.textContent = 'Pehle koi audio file upload karo.'; return; }
+  if(isPlaying){ stopPreview(); return; }
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') await audioCtx.resume();
+    const opts = currentOpts();
+    const trim = getTrim();
+    const processed = els.beforeAfter.checked;
+    liveSource = buildGraph(audioCtx, audioBuffer, audioCtx.destination, opts, trim, processed);
+    liveSource.source.onended = () => { if(isPlaying) stopPreview(); };
+    const now = audioCtx.currentTime;
+    scheduleFades(liveSource.master, now, liveSource.playedDuration, processed?opts.fadeIn:0, processed?opts.fadeOut:0, 0.9);
+    liveSource.source.start(now, trim.start, trim.end-trim.start);
+    if(liveSource.crackleSrc) liveSource.crackleSrc.start();
+    if(liveSource.rainSrc) liveSource.rainSrc.start();
+    if(liveSource.lfo) liveSource.lfo.start();
+    startedAt = now; isPlaying = true;
+    els.vinyl.classList.add('playing'); els.vinylHolder.classList.add('playing');
+    els.playBtn.textContent = '■ Stop';
+    updateClock();
+  }catch(err){
+    console.error(err);
+    els.statusMsg.textContent = 'Playback shuru nahi ho paya: ' + err.message;
+  }
+});
+
+// ---- WAV encode ----
+function bufferToWav(abuffer){
+  const numCh = abuffer.numberOfChannels, len = abuffer.length, sr = abuffer.sampleRate;
+  const blockAlign = numCh*2, dataSize = len*blockAlign;
+  const buffer = new ArrayBuffer(44+dataSize); const view = new DataView(buffer);
+  let pos = 0;
+  function u32(v){ view.setUint32(pos,v,true); pos+=4; }
+  function u16(v){ view.setUint16(pos,v,true); pos+=2; }
+  function str(s){ for(let i=0;i<s.length;i++){ view.setUint8(pos, s.charCodeAt(i)); pos++; } }
+  str('RIFF'); u32(36+dataSize); str('WAVE');
+  str('fmt '); u32(16); u16(1); u16(numCh); u32(sr); u32(sr*blockAlign); u16(blockAlign); u16(16);
+  str('data'); u32(dataSize);
+  const channels = []; for(let i=0;i<numCh;i++) channels.push(abuffer.getChannelData(i));
+  let offset=0;
+  while(offset<len){
+    for(let ch=0; ch<numCh; ch++){
+      let s = Math.max(-1, Math.min(1, channels[ch][offset]));
+      s = s<0 ? s*0x8000 : s*0x7fff;
+      view.setInt16(pos, s, true); pos+=2;
+    }
+    offset++;
+  }
+  return new Blob([view], { type:'audio/wav' });
+}
+
+// ---- MP3 encode (lamejs) ----
+function bufferToMp3(abuffer){
+  const numCh = Math.min(2, abuffer.numberOfChannels);
+  const sr = abuffer.sampleRate;
+  const encoder = new lamejs.Mp3Encoder(numCh, sr, 192);
+  const blockSize = 1152;
+  const left = abuffer.getChannelData(0);
+  const right = numCh>1 ? abuffer.getChannelData(1) : left;
+  const mp3Data = [];
+  function floatTo16(chunk){
+    const out = new Int16Array(chunk.length);
+    for(let i=0;i<chunk.length;i++){
+      let s = Math.max(-1, Math.min(1, chunk[i]));
+      out[i] = s<0 ? s*0x8000 : s*0x7fff;
+    }
+    return out;
+  }
+  for(let i=0; i<left.length; i+=blockSize){
+    const lChunk = floatTo16(left.subarray(i, i+blockSize));
+    let mp3buf;
+    if(numCh>1){
+      const rChunk = floatTo16(right.subarray(i, i+blockSize));
+      mp3buf = encoder.encodeBuffer(lChunk, rChunk);
+    }else{
+      mp3buf = encoder.encodeBuffer(lChunk);
+    }
+    if(mp3buf.length>0) mp3Data.push(new Int8Array(mp3buf));
+  }
+  const end = encoder.flush();
+  if(end.length>0) mp3Data.push(new Int8Array(end));
+  return new Blob(mp3Data, { type:'audio/mpeg' });
+}
+
+// ---- Export ----
+els.exportBtn.addEventListener('click', async ()=>{
+  if(!audioBuffer){ els.exportStatus.textContent = 'Pehle koi audio file upload karo.'; return; }
+  const OfflineCtor = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if(!OfflineCtor){ els.exportStatus.textContent = 'Ye browser offline rendering support nahi karta — Chrome ya Firefox try karo.'; return; }
+  const format = els.formatSelect.value;
+  if(format === 'mp3' && typeof lamejs === 'undefined'){
+    els.exportStatus.textContent = 'MP3 encoder load nahi hua (internet check karo), WAV try karo.';
+    return;
+  }
+  els.exportBtn.disabled = true;
+  els.exportStatus.textContent = 'Rendering...';
+  try{
+    const opts = currentOpts();
+    const trim = getTrim();
+    const tail = 2.2;
+    const totalDuration = (trim.end-trim.start)/opts.speed + tail;
+    const offlineCtx = new OfflineCtor(
+      Math.min(2, audioBuffer.numberOfChannels) < 2 ? audioBuffer.numberOfChannels : 2,
+      Math.ceil(totalDuration * audioBuffer.sampleRate),
+      audioBuffer.sampleRate
+    );
+    const graph = buildGraph(offlineCtx, audioBuffer, offlineCtx.destination, opts, trim, true);
+    scheduleFades(graph.master, 0, graph.playedDuration, opts.fadeIn, opts.fadeOut, 0.9);
+    graph.source.start(0, trim.start, trim.end-trim.start);
+    if(graph.crackleSrc) graph.crackleSrc.start();
+    if(graph.rainSrc) graph.rainSrc.start();
+    if(graph.lfo) graph.lfo.start();
+
+    const rendered = await offlineCtx.startRendering();
+    els.exportStatus.textContent = 'Encoding ' + format.toUpperCase() + '...';
+    const blob = format === 'mp3' ? bufferToMp3(rendered) : bufferToWav(rendered);
+    const ext = format === 'mp3' ? '.mp3' : '.wav';
+    const baseName = (els.filenameInput.value || 'warm-press-output').replace(/[^a-z0-9_\- ]/gi,'').trim() || 'warm-press-output';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = baseName+ext;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    els.exportStatus.innerHTML = 'Ready — <a class="download-link" href="'+url+'" download="'+baseName+ext+'">dobara download karo</a>';
+  }catch(err){
+    els.exportStatus.textContent = 'Render fail ho gaya: ' + err.message;
+    console.error(err);
+  }finally{
+    els.exportBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
